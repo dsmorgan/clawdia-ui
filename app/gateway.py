@@ -486,6 +486,7 @@ async def get_session_history(session_key: str) -> list[dict]:
         return []
 
 
+
 async def delete_session(session_key: str) -> bool:
     """Delete a session from OpenClaw. Returns True if successful."""
     settings = get_settings()
@@ -516,79 +517,3 @@ async def delete_session(session_key: str) -> bool:
         return False
 
 
-async def generate_title(session_key: str, first_message: str) -> Optional[str]:
-    """Ask OpenClaw to generate a short conversation title."""
-    settings = get_settings()
-    ws_url = settings.openclaw_ws_url
-
-    title_prompt = (
-        f"Generate a very short title (max 6 words) for a conversation that started "
-        f"with this message: \"{first_message[:200]}\". "
-        f"Reply with ONLY the title, no quotes, no explanation."
-    )
-
-    try:
-        async with websockets.connect(ws_url, open_timeout=CONNECT_TIMEOUT) as ws:
-            await _connect_and_auth(ws)
-
-            title_key = f"{session_key}-title"
-            create_req = _make_req("sessions.create", {"key": title_key})
-            await ws.send(json.dumps(create_req))
-            for _ in range(10):
-                raw = await asyncio.wait_for(ws.recv(), timeout=CONNECT_TIMEOUT)
-                frame = json.loads(raw)
-                if frame.get("type") == "res" and frame.get("id") == create_req["id"]:
-                    break
-
-            req = _make_req("sessions.send", {
-                "key": title_key,
-                "message": title_prompt,
-            })
-            req_id = req["id"]
-            await ws.send(json.dumps(req))
-
-            title_parts = []
-            async for raw in ws:
-                try:
-                    data = json.loads(raw)
-                except json.JSONDecodeError:
-                    continue
-
-                frame_type = data.get("type")
-
-                if frame_type == "event" and data.get("event") == "chat":
-                    payload = data.get("payload", {})
-                    if not payload.get("sessionKey", "").endswith(f"{session_key}-title"):
-                        continue
-
-                    state = payload.get("state", "")
-                    text = payload.get("text", "") or payload.get("message", "")
-
-                    if state == "delta" and text:
-                        title_parts.append(text)
-                    elif state == "final":
-                        if text:
-                            title_parts.append(text)
-                        break
-                    elif state == "error":
-                        return None
-
-                if frame_type == "event" and data.get("event") == "chat.lifecycle":
-                    payload = data.get("payload", {})
-                    if payload.get("sessionKey", "").endswith(f"{session_key}-title"):
-                        if payload.get("phase") in ("end", "error"):
-                            break
-
-                if frame_type == "res" and data.get("id") == req_id:
-                    if not data.get("ok"):
-                        return None
-
-            title = "".join(title_parts).strip()
-            title = title.strip("\"'").strip()
-            if len(title) > 80:
-                title = title[:77] + "..."
-            return title if title else None
-
-    except (asyncio.TimeoutError, ConnectionClosed, OSError, InvalidStatusCode) as e:
-        logger.error("Failed to generate title: %s", e)
-        return None

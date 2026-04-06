@@ -35,7 +35,7 @@ from app.database import (
     update_conversation_timestamp,
     delete_conversation,
 )
-from app.gateway import send_message, get_session_history, generate_title, delete_session, GatewayError
+from app.gateway import send_message, get_session_history, delete_session, GatewayError
 
 logger = logging.getLogger(__name__)
 
@@ -434,13 +434,13 @@ async def websocket_chat(websocket: WebSocket):
 async def _generate_title_background(
     conversation_id: int, user_sub: str, session_key: str, first_message: str
 ):
-    """Background task to generate and save a conversation title."""
+    """Background task to set a conversation title from the first message."""
     try:
-        title = await generate_title(session_key, first_message)
+        title = first_message.strip()
+        if len(title) > 60:
+            # Truncate at a word boundary
+            title = title[:57].rsplit(" ", 1)[0] + "..."
         if title:
             await update_conversation_title(conversation_id, user_sub, title)
-            logger.info(
-                "Auto-titled conversation %d: %s", conversation_id, title
-            )
     except Exception as e:
         logger.error("Failed to auto-title conversation %d: %s", conversation_id, e)
