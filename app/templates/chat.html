@@ -335,6 +335,25 @@
             .catch(() => {});
     }
 
+    async function deleteConversation(id, event) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!confirm('Delete this conversation?')) return;
+        try {
+            const resp = await fetch(`/api/conversations/${id}`, { method: 'DELETE' });
+            if (resp.ok) {
+                // If we're viewing this conversation, go home
+                if (currentConversationId === id) {
+                    window.location.href = '/';
+                } else {
+                    refreshSidebar();
+                }
+            }
+        } catch (err) {
+            console.error('Delete failed:', err);
+        }
+    }
+
     function escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;

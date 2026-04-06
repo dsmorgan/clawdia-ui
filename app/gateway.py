@@ -269,6 +269,7 @@ async def _connect_and_auth(ws) -> None:
     print(f"[GW] connected: protocol=v{payload.get('protocol', '?')}, scopes={scopes}", flush=True)
 
 
+
 # --- Public API ---
 
 async def send_message(
@@ -283,18 +284,16 @@ async def send_message(
         async with websockets.connect(ws_url, open_timeout=CONNECT_TIMEOUT) as ws:
             await _connect_and_auth(ws)
 
-            # Create the session first (ignore errors — session may already exist)
+            # Create session without explicit agentId — let OpenClaw bind the default agent
             create_req = _make_req("sessions.create", {
                 "key": session_key,
-                "agentId": settings.openclaw_agent_id,
             })
             await ws.send(json.dumps(create_req))
             for _ in range(10):
                 raw = await asyncio.wait_for(ws.recv(), timeout=CONNECT_TIMEOUT)
                 frame = json.loads(raw)
-                print(f"[GW] create-wait: type={frame.get('type')} id={frame.get('id')} ok={frame.get('ok')} expect_id={create_req['id']}", flush=True)
                 if frame.get("type") == "res" and frame.get("id") == create_req["id"]:
-                    print(f"[GW] session create result: ok={frame.get('ok')}", flush=True)
+                    print(f"[GW] session create: ok={frame.get('ok')} payload={json.dumps(frame.get('payload', {}), default=str)[:200]}", flush=True)
                     break
 
             # Now send the message
@@ -407,13 +406,27 @@ async def get_session_history(session_key: str) -> list[dict]:
                     payload = data.get("payload", {})
                     raw_messages = payload.get("messages", payload.get("history", payload.get("transcript", [])))
 
+                    # Debug: log raw transcript to understand structure
+                    for i, m in enumerate(raw_messages):
+                        oc = m.get("__openclaw", {})
+                        print(f"[GW] history[{i}]: role={m.get('role')} oc={json.dumps(oc, default=str)[:200]} content_preview={json.dumps(m.get('content', ''), default=str)[:150]}", flush=True)
+
                     messages = []
+                    seen = set()
                     for m in raw_messages:
                         role = m.get("role", "assistant")
                         raw_content = m.get("content", "")
+
+                        # Skip tool results and system messages
                         if role in ("tool", "toolResult", "system"):
                             continue
-                        # Content can be a string or array of content blocks
+
+                        # Skip internal/injected user messages (runtime context, subagent results)
+                        # Real user messages have 'senderLabel'; injected ones have 'provenance'
+                        if role == "user" and ("provenance" in m or "senderLabel" not in m):
+                            continue
+
+                        # Extract visible text from content blocks, skipping toolCall blocks
                         if isinstance(raw_content, list):
                             text_parts = [
                                 block.get("text", "")
@@ -423,11 +436,24 @@ async def get_session_history(session_key: str) -> list[dict]:
                             content = "".join(text_parts)
                         else:
                             content = str(raw_content) if raw_content else ""
-                        if content:
-                            messages.append({
-                                "role": "user" if role in ("user", "human") else "assistant",
-                                "content": content,
-                            })
+
+                        if not content:
+                            continue
+
+                        mapped_role = "user" if role in ("user", "human") else "assistant"
+
+                        # Deduplicate: OpenClaw's multi-channel delivery creates
+                        # duplicate messages (assistant echo, user echo, re-delivery)
+                        # with identical content but different seq/role
+                        dedup_key = content.strip()
+                        if dedup_key in seen:
+                            continue
+                        seen.add(dedup_key)
+
+                        messages.append({
+                            "role": mapped_role,
+                            "content": content,
+                        })
                     return messages
 
         return []
@@ -438,6 +464,36 @@ async def get_session_history(session_key: str) -> list[dict]:
     except (ConnectionClosed, OSError, InvalidStatusCode) as e:
         logger.error("Failed to fetch session history: %s", e)
         return []
+
+
+async def delete_session(session_key: str) -> bool:
+    """Delete a session from OpenClaw. Returns True if successful."""
+    settings = get_settings()
+    ws_url = settings.openclaw_ws_url
+
+    try:
+        async with websockets.connect(ws_url, open_timeout=CONNECT_TIMEOUT) as ws:
+            await _connect_and_auth(ws)
+
+            req = _make_req("sessions.delete", {
+                "key": session_key,
+            })
+            req_id = req["id"]
+            await ws.send(json.dumps(req))
+
+            async for raw in ws:
+                try:
+                    data = json.loads(raw)
+                except json.JSONDecodeError:
+                    continue
+                if data.get("type") == "res" and data.get("id") == req_id:
+                    return data.get("ok", False)
+
+        return False
+
+    except (asyncio.TimeoutError, ConnectionClosed, OSError, InvalidStatusCode) as e:
+        logger.error("Failed to delete session: %s", e)
+        return False
 
 
 async def generate_title(session_key: str, first_message: str) -> Optional[str]:
@@ -455,9 +511,8 @@ async def generate_title(session_key: str, first_message: str) -> Optional[str]:
         async with websockets.connect(ws_url, open_timeout=CONNECT_TIMEOUT) as ws:
             await _connect_and_auth(ws)
 
-            # Create title session first
             title_key = f"{session_key}-title"
-            create_req = _make_req("sessions.create", {"key": title_key, "agentId": settings.openclaw_agent_id})
+            create_req = _make_req("sessions.create", {"key": title_key})
             await ws.send(json.dumps(create_req))
             for _ in range(10):
                 raw = await asyncio.wait_for(ws.recv(), timeout=CONNECT_TIMEOUT)

@@ -35,7 +35,7 @@ from app.database import (
     update_conversation_timestamp,
     delete_conversation,
 )
-from app.gateway import send_message, get_session_history, generate_title, GatewayError
+from app.gateway import send_message, get_session_history, generate_title, delete_session, GatewayError
 
 logger = logging.getLogger(__name__)
 
@@ -295,14 +295,25 @@ async def create_new_conversation(request: Request):
 
 @app.delete("/api/conversations/{conversation_id}")
 async def delete_conv(request: Request, conversation_id: int):
-    """Delete a conversation."""
+    """Delete a conversation and its OpenClaw session."""
     user = get_current_user(request)
     if user is None:
         raise HTTPException(status_code=401)
 
-    deleted = await delete_conversation(conversation_id, user.sub)
-    if not deleted:
+    # Get the session key before deleting locally
+    conversation = await get_conversation(conversation_id, user.sub)
+    if not conversation:
         raise HTTPException(status_code=404)
+
+    # Delete from local DB
+    await delete_conversation(conversation_id, user.sub)
+
+    # Best-effort delete from OpenClaw (don't fail if gateway is unreachable)
+    try:
+        await delete_session(conversation["session_key"])
+    except Exception as e:
+        logger.warning("Failed to delete OpenClaw session %s: %s", conversation["session_key"], e)
+
     return {"ok": True}
 
 
