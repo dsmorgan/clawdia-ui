@@ -1,0 +1,29 @@
+<!-- Messages partial — loaded via HTMX for history -->
+{% for msg in messages %}
+<div class="msg-enter flex {% if msg.role == 'user' %}justify-end{% else %}justify-start{% endif %} mb-4">
+    {% if msg.role != 'user' %}
+    <!-- AI avatar -->
+    <div class="w-8 h-8 rounded-full bg-ai/20 flex items-center justify-center text-ai font-semibold text-xs shrink-0 mr-2 mt-1">
+        C
+    </div>
+    {% endif %}
+
+    <div class="msg-bubble max-w-[85%] md:max-w-[70%] relative group">
+        <div class="{% if msg.role == 'user' %}bg-accent/15 border border-accent/20{% else %}glass{% endif %} rounded-2xl px-4 py-3 {% if msg.role == 'user' %}rounded-br-md{% else %}rounded-bl-md{% endif %}">
+            <div class="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap break-words msg-content">{{ msg.content }}</div>
+        </div>
+        <!-- Copy button -->
+        <button class="copy-btn absolute -bottom-1 {% if msg.role == 'user' %}left-0 -translate-x-full{% else %}right-0 translate-x-full{% endif %} px-1.5 py-0.5 rounded text-[10px] text-gray-500 hover:text-gray-300 hover:bg-white/5 transition-all"
+                onclick="navigator.clipboard.writeText(this.closest('.msg-bubble').querySelector('.msg-content').textContent)">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+            </svg>
+        </button>
+    </div>
+
+    {% if msg.role == 'user' %}
+    <!-- Spacer for alignment -->
+    <div class="w-8 shrink-0 ml-2"></div>
+    {% endif %}
+</div>
+{% endfor %}

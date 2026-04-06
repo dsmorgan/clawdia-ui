@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Signed Out — Clawdia{% endblock %}
+
+{% block body %}
+<div class="relative z-10 flex items-center justify-center h-dvh px-4">
+    <div class="glass rounded-3xl p-8 sm:p-12 max-w-sm w-full text-center">
+        <!-- Logo -->
+        <div class="w-16 h-16 rounded-2xl bg-ai/15 border border-ai/20 flex items-center justify-center mx-auto mb-6">
+            <span class="text-2xl font-bold text-ai">C</span>
+        </div>
+
+        <h1 class="text-2xl font-semibold text-gray-100 mb-2">Clawdia</h1>
+        <p class="text-sm text-gray-500 mb-8">Your home media server assistant</p>
+
+        <a href="/auth/login"
+           class="inline-flex items-center justify-center gap-2 w-full py-3 px-6 rounded-xl bg-accent hover:bg-accent/80 text-white font-medium text-sm transition-all duration-200 min-h-[44px] hover:shadow-[0_0_20px_rgba(79,142,247,0.3)]">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+            </svg>
+            Sign in with Authentik
+        </a>
+
+        <p class="text-xs text-gray-700 mt-6">
+            Protected by your homelab identity provider
+        </p>
+    </div>
+</div>
+{% endblock %}

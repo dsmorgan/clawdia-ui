@@ -1,0 +1,12 @@
+services:
+  clawdia-ui:
+    build: .
+    container_name: clawdia-ui
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8000}:8000"
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config:ro
+    env_file:
+      - .env

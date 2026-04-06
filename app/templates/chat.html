@@ -1,0 +1,352 @@
+{% extends "base.html" %}
+
+{% block title %}{% if current_conversation %}{{ current_conversation.title }} — Clawdia{% else %}Clawdia{% endif %}{% endblock %}
+
+{% block body %}
+<div class="relative z-10 flex h-dvh">
+
+    <!-- ===== Mobile sidebar overlay ===== -->
+    <div id="sidebar-overlay" class="sidebar-overlay fixed inset-0 bg-black/60 z-40 lg:hidden"
+         onclick="toggleSidebar()"></div>
+
+    <!-- ===== Sidebar ===== -->
+    <aside id="sidebar" class="sidebar-drawer fixed lg:relative z-50 lg:z-auto w-[280px] lg:w-[260px] h-dvh glass lg:transform-none lg:opacity-100 shrink-0">
+        {% include "sidebar.html" %}
+    </aside>
+
+    <!-- ===== Main chat area ===== -->
+    <main class="flex-1 flex flex-col min-w-0 relative">
+
+        <!-- Header -->
+        <header class="glass border-b border-surface-border px-4 py-3 flex items-center gap-3 shrink-0">
+            <!-- Mobile hamburger -->
+            <button class="lg:hidden p-1.5 -ml-1 rounded-lg hover:bg-white/5 transition-colors" onclick="toggleSidebar()">
+                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                </svg>
+            </button>
+
+            <h1 class="text-sm font-medium text-gray-300 truncate flex-1" id="chat-title">
+                {% if current_conversation %}
+                    {{ current_conversation.title }}
+                {% else %}
+                    New Conversation
+                {% endif %}
+            </h1>
+
+            <!-- New chat button (desktop) -->
+            <a href="/" class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-gray-400 hover:text-accent hover:bg-accent/10 transition-all">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                New
+            </a>
+        </header>
+
+        <!-- Messages area -->
+        <div class="flex-1 overflow-y-auto px-4 py-6" id="messages-container">
+            <div id="messages" class="max-w-3xl mx-auto space-y-1">
+                {% if messages %}
+                    {% include "messages.html" %}
+                {% elif not current_conversation %}
+                    <!-- Welcome state -->
+                    <div class="flex flex-col items-center justify-center h-full min-h-[60vh]" id="welcome-state">
+                        <div class="w-16 h-16 rounded-2xl bg-ai/15 border border-ai/20 flex items-center justify-center mb-6">
+                            <span class="text-2xl font-bold text-ai">C</span>
+                        </div>
+                        <h2 class="text-xl font-semibold text-gray-200 mb-2">Hi! I'm Clawdia</h2>
+                        <p class="text-sm text-gray-500 text-center max-w-sm">
+                            Your home media server assistant. Ask me about Jellyfin, downloads, media requests, or anything about your server.
+                        </p>
+                    </div>
+                {% endif %}
+
+                <!-- Typing indicator (hidden by default) -->
+                <div id="typing-indicator" class="flex justify-start mb-4 hidden">
+                    <div class="w-8 h-8 rounded-full bg-ai/20 flex items-center justify-center text-ai font-semibold text-xs shrink-0 mr-2 mt-1">
+                        C
+                    </div>
+                    <div class="glass rounded-2xl rounded-bl-md px-4 py-3">
+                        <div class="flex gap-1.5 items-center h-5">
+                            <div class="typing-dot w-2 h-2 rounded-full bg-ai/60"></div>
+                            <div class="typing-dot w-2 h-2 rounded-full bg-ai/60"></div>
+                            <div class="typing-dot w-2 h-2 rounded-full bg-ai/60"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick actions -->
+        {% if quick_actions %}
+        <div id="quick-actions" class="px-4 pb-2 shrink-0 {% if current_conversation and messages %}hidden{% endif %}">
+            <div class="max-w-3xl mx-auto quick-scroll flex gap-2 py-1">
+                {% for action in quick_actions %}
+                <button onclick="fillInput({{ action.prompt|tojson }})"
+                        class="pill-shimmer shrink-0 px-4 py-2 rounded-full glass text-xs text-gray-400 hover:text-gray-200 hover:border-accent/30 transition-all whitespace-nowrap min-h-[44px]">
+                    {{ action.label }}
+                </button>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Input area -->
+        <div class="px-4 pb-4 pt-2 shrink-0">
+            <div class="max-w-3xl mx-auto">
+                <form id="chat-form" class="flex gap-2 items-end" onsubmit="return handleSend(event)">
+                    <div class="flex-1 glass rounded-2xl overflow-hidden transition-all duration-200 focus-within:border-accent/30 focus-within:shadow-[0_0_0_2px_rgba(79,142,247,0.15)]">
+                        <textarea id="chat-input"
+                                  class="input-glow w-full bg-transparent text-sm text-gray-200 placeholder-gray-600 px-4 py-3 resize-none outline-none border-none min-h-[44px] max-h-[120px]"
+                                  placeholder="Message Clawdia..."
+                                  rows="1"
+                                  onkeydown="handleKeydown(event)"
+                                  oninput="autoResize(this)"></textarea>
+                    </div>
+                    <button type="submit" id="send-btn"
+                            class="shrink-0 w-11 h-11 rounded-xl bg-accent hover:bg-accent/80 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-all duration-200"
+                            disabled>
+                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+    </main>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // --- State ---
+    let ws = null;
+    let currentSessionKey = {{ (current_conversation.session_key|tojson) if current_conversation else 'null' }};
+    let currentConversationId = {{ current_conversation.id if current_conversation else 'null' }};
+    let isWaiting = false;
+    let currentAiMessage = null;
+
+    // --- Sidebar toggle ---
+    function toggleSidebar() {
+        document.getElementById('sidebar').classList.toggle('open');
+        document.getElementById('sidebar-overlay').classList.toggle('open');
+    }
+
+    // --- Auto-resize textarea ---
+    function autoResize(el) {
+        el.style.height = 'auto';
+        el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+        document.getElementById('send-btn').disabled = !el.value.trim() || isWaiting;
+    }
+
+    // --- Fill input from quick action ---
+    function fillInput(text) {
+        const input = document.getElementById('chat-input');
+        input.value = text;
+        input.focus();
+        autoResize(input);
+    }
+
+    // --- Keyboard handling ---
+    function handleKeydown(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSend(e);
+        }
+    }
+
+    // --- WebSocket connection ---
+    function connectWs() {
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        ws = new WebSocket(`${proto}//${location.host}/ws/chat`);
+
+        ws.onopen = () => console.log('WS connected');
+        ws.onclose = () => {
+            console.log('WS disconnected, reconnecting in 2s...');
+            setTimeout(connectWs, 2000);
+        };
+        ws.onerror = (e) => console.error('WS error:', e);
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            handleWsMessage(data);
+        };
+    }
+
+    function handleWsMessage(data) {
+        if (data.type === 'chunk') {
+            hideTyping();
+            if (!currentAiMessage) {
+                currentAiMessage = appendMessage('assistant', '');
+            }
+            const contentEl = currentAiMessage.querySelector('.msg-content');
+            contentEl.textContent += data.content;
+            scrollToBottom();
+        } else if (data.type === 'done') {
+            hideTyping();
+            currentAiMessage = null;
+            setWaiting(false);
+            // Refresh sidebar for potential title update
+            setTimeout(refreshSidebar, 1500);
+        } else if (data.type === 'error') {
+            hideTyping();
+            if (!currentAiMessage) {
+                currentAiMessage = appendMessage('assistant', '');
+            }
+            const contentEl = currentAiMessage.querySelector('.msg-content');
+            contentEl.textContent = data.content || 'An error occurred';
+            contentEl.classList.add('text-red-400');
+            currentAiMessage = null;
+            setWaiting(false);
+        }
+    }
+
+    // --- Send message ---
+    async function handleSend(e) {
+        e.preventDefault();
+        const input = document.getElementById('chat-input');
+        const content = input.value.trim();
+        if (!content || isWaiting) return;
+
+        // Create conversation if needed
+        if (!currentSessionKey) {
+            try {
+                const resp = await fetch('/api/conversations', { method: 'POST' });
+                if (!resp.ok) throw new Error('Failed to create conversation');
+                const data = await resp.json();
+                currentSessionKey = data.session_key;
+                currentConversationId = data.id;
+                // Update URL without reload
+                history.pushState({}, '', `/chat/${data.id}`);
+                // Hide welcome state
+                const welcome = document.getElementById('welcome-state');
+                if (welcome) welcome.remove();
+            } catch (err) {
+                console.error(err);
+                return;
+            }
+        }
+
+        // Show user message
+        appendMessage('user', content);
+        input.value = '';
+        autoResize(input);
+
+        // Hide quick actions after first message
+        const qa = document.getElementById('quick-actions');
+        if (qa) qa.classList.add('hidden');
+
+        setWaiting(true);
+        showTyping();
+        scrollToBottom();
+
+        // Send via WebSocket
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                action: 'message',
+                session_key: currentSessionKey,
+                content: content,
+            }));
+        } else {
+            hideTyping();
+            appendMessage('assistant', 'Connection lost. Please refresh the page.');
+            setWaiting(false);
+        }
+    }
+
+    // --- DOM helpers ---
+    function appendMessage(role, content) {
+        const container = document.getElementById('messages');
+        const wrapper = document.createElement('div');
+        wrapper.className = `msg-enter flex ${role === 'user' ? 'justify-end' : 'justify-start'} mb-4`;
+
+        const avatar = role !== 'user'
+            ? `<div class="w-8 h-8 rounded-full bg-ai/20 flex items-center justify-center text-ai font-semibold text-xs shrink-0 mr-2 mt-1">C</div>`
+            : '';
+        const spacer = role === 'user'
+            ? `<div class="w-8 shrink-0 ml-2"></div>`
+            : '';
+        const bubbleClass = role === 'user'
+            ? 'bg-accent/15 border border-accent/20 rounded-br-md'
+            : 'glass rounded-bl-md';
+
+        wrapper.innerHTML = `
+            ${avatar}
+            <div class="msg-bubble max-w-[85%] md:max-w-[70%] relative group">
+                <div class="${bubbleClass} rounded-2xl px-4 py-3">
+                    <div class="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap break-words msg-content">${escapeHtml(content)}</div>
+                </div>
+                <button class="copy-btn absolute -bottom-1 ${role === 'user' ? 'left-0 -translate-x-full' : 'right-0 translate-x-full'} px-1.5 py-0.5 rounded text-[10px] text-gray-500 hover:text-gray-300 hover:bg-white/5 transition-all"
+                        onclick="navigator.clipboard.writeText(this.closest('.msg-bubble').querySelector('.msg-content').textContent)">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                    </svg>
+                </button>
+            </div>
+            ${spacer}
+        `;
+
+        // Insert before typing indicator
+        const typing = document.getElementById('typing-indicator');
+        container.insertBefore(wrapper, typing);
+        scrollToBottom();
+        return wrapper;
+    }
+
+    function showTyping() {
+        document.getElementById('typing-indicator').classList.remove('hidden');
+        scrollToBottom();
+    }
+
+    function hideTyping() {
+        document.getElementById('typing-indicator').classList.add('hidden');
+    }
+
+    function setWaiting(waiting) {
+        isWaiting = waiting;
+        const btn = document.getElementById('send-btn');
+        const input = document.getElementById('chat-input');
+        if (waiting) {
+            btn.disabled = true;
+            btn.classList.add('btn-pulse');
+            input.disabled = true;
+        } else {
+            btn.classList.remove('btn-pulse');
+            input.disabled = false;
+            input.focus();
+            btn.disabled = !input.value.trim();
+        }
+    }
+
+    function scrollToBottom() {
+        const container = document.getElementById('messages-container');
+        requestAnimationFrame(() => {
+            container.scrollTop = container.scrollHeight;
+        });
+    }
+
+    function refreshSidebar() {
+        fetch('/partials/sidebar')
+            .then(r => r.text())
+            .then(html => {
+                document.getElementById('sidebar').innerHTML = html;
+            })
+            .catch(() => {});
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // --- Init ---
+    document.addEventListener('DOMContentLoaded', () => {
+        connectWs();
+        scrollToBottom();
+        const input = document.getElementById('chat-input');
+        if (input) input.focus();
+    });
+</script>
+{% endblock %}

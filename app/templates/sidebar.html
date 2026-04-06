@@ -1,0 +1,69 @@
+<!-- Sidebar content partial — loaded via HTMX -->
+<div class="flex flex-col h-full">
+    <!-- User info -->
+    <div class="p-4 border-b border-surface-border">
+        <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-full bg-accent/20 flex items-center justify-center text-accent font-semibold text-sm shrink-0">
+                {{ user.name[0]|upper if user.name else '?' }}
+            </div>
+            <div class="min-w-0">
+                <div class="text-sm font-medium text-gray-200 truncate">{{ user.name }}</div>
+                {% if user.email %}
+                <div class="text-xs text-gray-500 truncate">{{ user.email }}</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- New conversation button -->
+    <div class="p-3">
+        <a href="/"
+           class="flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl bg-accent/15 hover:bg-accent/25 text-accent font-medium text-sm transition-all duration-200 border border-accent/20 hover:border-accent/30">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+            </svg>
+            New Conversation
+        </a>
+    </div>
+
+    <!-- Conversation list -->
+    <div class="flex-1 overflow-y-auto px-2 pb-2">
+        {% for group_name, convs in conversations.items() %}
+        <div class="mb-3">
+            <div class="px-3 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+                {{ group_name }}
+            </div>
+            {% for conv in convs %}
+            <a href="/chat/{{ conv.id }}"
+               class="sidebar-item block px-3 py-2.5 rounded-lg mb-0.5 cursor-pointer group {% if current_conversation and current_conversation.id == conv.id %}active{% endif %}"
+               id="conv-{{ conv.id }}">
+                <div class="text-sm text-gray-300 group-hover:text-gray-100 truncate transition-colors">
+                    {{ conv.title }}
+                </div>
+                <div class="text-[10px] text-gray-600 mt-0.5">
+                    {{ relative_time(conv.updated_at) }}
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% endfor %}
+
+        {% if not conversations %}
+        <div class="px-3 py-8 text-center">
+            <div class="text-gray-600 text-sm">No conversations yet</div>
+            <div class="text-gray-700 text-xs mt-1">Start one above!</div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Logout -->
+    <div class="p-3 border-t border-surface-border">
+        <a href="/auth/logout"
+           class="flex items-center gap-2 px-3 py-2 text-sm text-gray-500 hover:text-gray-300 transition-colors rounded-lg hover:bg-white/5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+            </svg>
+            Sign out
+        </a>
+    </div>
+</div>

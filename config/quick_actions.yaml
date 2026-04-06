@@ -1,0 +1,15 @@
+quick_actions:
+  - label: "Who's streaming now?"
+    prompt: "Check Jellyfin and tell me who is currently streaming, what they are watching, and on what device."
+
+  - label: "Is Jellyfin running?"
+    prompt: "Check the Jellyfin container status and confirm it is running properly. If there are any issues, explain them in simple terms."
+
+  - label: "What's downloading?"
+    prompt: "Check what is currently downloading, including titles, progress percentage, and estimated completion time."
+
+  - label: "Help me troubleshoot a Jellyfin issue"
+    prompt: "I'm having trouble with Jellyfin. Please check the container status, recent logs for errors, and active sessions, then help me diagnose the problem in plain language."
+
+  - label: "Can you approve my requests?"
+    prompt: "Check Jellyseerr for any pending media requests and process them appropriately."
