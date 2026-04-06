@@ -296,14 +296,27 @@ async def send_message(
                     print(f"[GW] session create: ok={frame.get('ok')} payload={json.dumps(frame.get('payload', {}), default=str)[:200]}", flush=True)
                     break
 
+            # Subscribe to message updates for this session
+            sub_req = _make_req("sessions.messages.subscribe", {
+                "key": session_key,
+            })
+            await ws.send(json.dumps(sub_req))
+            for _ in range(10):
+                raw = await asyncio.wait_for(ws.recv(), timeout=CONNECT_TIMEOUT)
+                frame = json.loads(raw)
+                if frame.get("type") == "res" and frame.get("id") == sub_req["id"]:
+                    print(f"[GW] subscribe result: ok={frame.get('ok')} payload={json.dumps(frame.get('payload', {}), default=str)[:200]}", flush=True)
+                    break
+
             # Now send the message
             req = _make_req("sessions.send", {
                 "key": session_key,
                 "message": message,
             })
             req_id = req["id"]
+            print(f"[GW] sending sessions.send req_id={req_id} key={session_key}", flush=True)
             await ws.send(json.dumps(req))
-            print(f"[GW] sessions.send sent, req_id={req_id}, session_key={session_key}", flush=True)
+            print(f"[GW] sessions.send dispatched", flush=True)
 
             got_response = False
             async for raw in ws:
@@ -313,6 +326,7 @@ async def send_message(
                     continue
 
                 frame_type = data.get("type")
+                event_name = data.get("event", "")
 
                 # RPC response to our sessions.send request
                 if frame_type == "res" and data.get("id") == req_id:
@@ -347,6 +361,21 @@ async def send_message(
                             error_text = agent_data.get("error", "Agent error")
                             yield f"\n\n*Error: {error_text}*"
                             return
+
+                # Session message events — detect tool calls for status updates
+                if frame_type == "event" and event_name == "session.message":
+                    payload = data.get("payload", {})
+                    if not payload.get("sessionKey", "").endswith(session_key):
+                        continue
+                    msg = payload.get("message", {})
+                    if msg.get("role") == "assistant":
+                        msg_content = msg.get("content", [])
+                        if isinstance(msg_content, list):
+                            for block in msg_content:
+                                if isinstance(block, dict) and block.get("type") == "toolCall":
+                                    tool_name = block.get("name", "")
+                                    if tool_name:
+                                        yield {"type": "status", "status": "tool", "tool": tool_name}
 
                 # Chat final as a fallback completion signal
                 if frame_type == "event" and data.get("event") == "chat":

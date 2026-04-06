@@ -182,9 +182,32 @@
     let workingTimerInterval = null;
     let workingStartTime = null;
 
+    // Friendly labels for OpenClaw tool names
+    const toolLabels = {
+        'exec': 'Running command',
+        'read': 'Reading file',
+        'write': 'Writing file',
+        'web_fetch': 'Fetching web page',
+        'web_search': 'Searching the web',
+        'session_status': 'Checking status',
+        'sessions_send': 'Messaging agent',
+        'sessions_spawn': 'Starting sub-agent',
+        'subagents': 'Coordinating agents',
+    };
+
+    function friendlyToolName(tool) {
+        if (toolLabels[tool]) return toolLabels[tool];
+        // Convert snake_case to Title Case
+        return tool.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    }
+
     function handleWsMessage(data) {
-        if (data.type === 'status' && data.status === 'working') {
-            showWorking();
+        if (data.type === 'status') {
+            if (data.tool) {
+                showWorking(friendlyToolName(data.tool));
+            } else {
+                showWorking();
+            }
             scrollToBottom();
         } else if (data.type === 'chunk') {
             hideWorking();
@@ -319,23 +342,27 @@
         document.getElementById('typing-indicator').classList.add('hidden');
     }
 
-    function showWorking() {
+    function showWorking(label) {
         const indicator = document.getElementById('typing-indicator');
         const dots = document.getElementById('typing-dots');
         const working = document.getElementById('working-status');
         const timer = document.getElementById('working-timer');
+        const text = document.getElementById('working-text');
 
         indicator.classList.remove('hidden');
         dots.classList.add('hidden');
         working.classList.remove('hidden');
+        text.textContent = label || 'Working on it...';
 
-        // Start elapsed timer
-        workingStartTime = Date.now();
-        if (workingTimerInterval) clearInterval(workingTimerInterval);
-        workingTimerInterval = setInterval(() => {
-            const elapsed = Math.floor((Date.now() - workingStartTime) / 1000);
-            timer.textContent = `${elapsed}s`;
-        }, 1000);
+        // Start elapsed timer only on first call
+        if (!workingStartTime) {
+            workingStartTime = Date.now();
+            if (workingTimerInterval) clearInterval(workingTimerInterval);
+            workingTimerInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - workingStartTime) / 1000);
+                timer.textContent = `${elapsed}s`;
+            }, 1000);
+        }
         scrollToBottom();
     }
 

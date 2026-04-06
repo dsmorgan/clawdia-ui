@@ -390,10 +390,10 @@ async def websocket_chat(websocket: WebSocket):
                     async for chunk in send_message(session_key, content):
                         # Status events (dict) vs text chunks (str)
                         if isinstance(chunk, dict) and chunk.get("type") == "status":
-                            await websocket.send_json({
-                                "type": "status",
-                                "status": chunk["status"],
-                            })
+                            msg = {"type": "status", "status": chunk["status"]}
+                            if "tool" in chunk:
+                                msg["tool"] = chunk["tool"]
+                            await websocket.send_json(msg)
                         else:
                             full_response.append(chunk)
                             await websocket.send_json({
