@@ -313,17 +313,6 @@ async def send_message(
                     continue
 
                 frame_type = data.get("type")
-                # Debug: log all incoming frames
-                event_name = data.get("event", "")
-                payload_dbg = data.get("payload", {})
-                if event_name == "agent":
-                    print(f"[GW] rx: agent stream={payload_dbg.get('stream')} sessionKey={payload_dbg.get('sessionKey', 'MISSING')} data={json.dumps(payload_dbg.get('data', {}), default=str)[:200]}", flush=True)
-                elif event_name == "chat":
-                    print(f"[GW] rx: chat state={payload_dbg.get('state')} message={json.dumps(payload_dbg.get('message', ''), default=str)[:200]}", flush=True)
-                elif frame_type == "res":
-                    print(f"[GW] rx: res id={data.get('id')} ok={data.get('ok')} keys={list(payload_dbg.keys())}", flush=True)
-                else:
-                    print(f"[GW] rx: type={frame_type} event={event_name}", flush=True)
 
                 # RPC response to our sessions.send request
                 if frame_type == "res" and data.get("id") == req_id:
@@ -333,10 +322,9 @@ async def send_message(
                         yield f"\n\n*Error: {msg}*"
                     got_response = True
 
-                # Agent stream events — use delta for real-time streaming
+                # Agent stream events
                 if frame_type == "event" and data.get("event") == "agent":
                     payload = data.get("payload", {})
-                    # OpenClaw prefixes session keys with agent:<agentId>:
                     event_session = payload.get("sessionKey", "")
                     if not event_session.endswith(session_key):
                         continue
@@ -350,9 +338,12 @@ async def send_message(
 
                     elif stream == "lifecycle":
                         phase = agent_data.get("phase", "")
-                        if phase == "end":
+                        if phase == "start":
+                            # Signal that the agent is working (subagent calls, tool use, etc.)
+                            yield {"type": "status", "status": "working"}
+                        elif phase == "end":
                             return
-                        if phase == "error":
+                        elif phase == "error":
                             error_text = agent_data.get("error", "Agent error")
                             yield f"\n\n*Error: {error_text}*"
                             return

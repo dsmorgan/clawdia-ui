@@ -61,16 +61,21 @@
                     </div>
                 {% endif %}
 
-                <!-- Typing indicator (hidden by default) -->
+                <!-- Typing/working indicator (hidden by default) -->
                 <div id="typing-indicator" class="flex justify-start mb-4 hidden">
                     <div class="w-8 h-8 rounded-full bg-ai/20 flex items-center justify-center text-ai font-semibold text-xs shrink-0 mr-2 mt-1">
                         C
                     </div>
                     <div class="glass rounded-2xl rounded-bl-md px-4 py-3">
-                        <div class="flex gap-1.5 items-center h-5">
+                        <div id="typing-dots" class="flex gap-1.5 items-center h-5">
                             <div class="typing-dot w-2 h-2 rounded-full bg-ai/60"></div>
                             <div class="typing-dot w-2 h-2 rounded-full bg-ai/60"></div>
                             <div class="typing-dot w-2 h-2 rounded-full bg-ai/60"></div>
+                        </div>
+                        <div id="working-status" class="hidden flex items-center gap-2 h-5">
+                            <div class="working-spinner w-3.5 h-3.5 border-2 border-ai/30 border-t-ai rounded-full"></div>
+                            <span class="text-xs text-gray-400" id="working-text">Working on it...</span>
+                            <span class="text-[10px] text-gray-600" id="working-timer"></span>
                         </div>
                     </div>
                 </div>
@@ -174,8 +179,15 @@
         };
     }
 
+    let workingTimerInterval = null;
+    let workingStartTime = null;
+
     function handleWsMessage(data) {
-        if (data.type === 'chunk') {
+        if (data.type === 'status' && data.status === 'working') {
+            showWorking();
+            scrollToBottom();
+        } else if (data.type === 'chunk') {
+            hideWorking();
             hideTyping();
             if (!currentAiMessage) {
                 currentAiMessage = appendMessage('assistant', '');
@@ -184,12 +196,14 @@
             contentEl.textContent += data.content;
             scrollToBottom();
         } else if (data.type === 'done') {
+            hideWorking();
             hideTyping();
             currentAiMessage = null;
             setWaiting(false);
             // Refresh sidebar for potential title update
             setTimeout(refreshSidebar, 1500);
         } else if (data.type === 'error') {
+            hideWorking();
             hideTyping();
             if (!currentAiMessage) {
                 currentAiMessage = appendMessage('assistant', '');
@@ -296,11 +310,45 @@
 
     function showTyping() {
         document.getElementById('typing-indicator').classList.remove('hidden');
+        document.getElementById('typing-dots').classList.remove('hidden');
+        document.getElementById('working-status').classList.add('hidden');
         scrollToBottom();
     }
 
     function hideTyping() {
         document.getElementById('typing-indicator').classList.add('hidden');
+    }
+
+    function showWorking() {
+        const indicator = document.getElementById('typing-indicator');
+        const dots = document.getElementById('typing-dots');
+        const working = document.getElementById('working-status');
+        const timer = document.getElementById('working-timer');
+
+        indicator.classList.remove('hidden');
+        dots.classList.add('hidden');
+        working.classList.remove('hidden');
+
+        // Start elapsed timer
+        workingStartTime = Date.now();
+        if (workingTimerInterval) clearInterval(workingTimerInterval);
+        workingTimerInterval = setInterval(() => {
+            const elapsed = Math.floor((Date.now() - workingStartTime) / 1000);
+            timer.textContent = `${elapsed}s`;
+        }, 1000);
+        scrollToBottom();
+    }
+
+    function hideWorking() {
+        if (workingTimerInterval) {
+            clearInterval(workingTimerInterval);
+            workingTimerInterval = null;
+        }
+        workingStartTime = null;
+        const working = document.getElementById('working-status');
+        if (working) working.classList.add('hidden');
+        const dots = document.getElementById('typing-dots');
+        if (dots) dots.classList.remove('hidden');
     }
 
     function setWaiting(waiting) {

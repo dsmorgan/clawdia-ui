@@ -388,12 +388,18 @@ async def websocket_chat(websocket: WebSocket):
 
                 try:
                     async for chunk in send_message(session_key, content):
-                        full_response.append(chunk)
-                        print(f"[WS] sending chunk: {chunk[:50]}", flush=True)
-                        await websocket.send_json({
-                            "type": "chunk",
-                            "content": chunk,
-                        })
+                        # Status events (dict) vs text chunks (str)
+                        if isinstance(chunk, dict) and chunk.get("type") == "status":
+                            await websocket.send_json({
+                                "type": "status",
+                                "status": chunk["status"],
+                            })
+                        else:
+                            full_response.append(chunk)
+                            await websocket.send_json({
+                                "type": "chunk",
+                                "content": chunk,
+                            })
 
                     await websocket.send_json({"type": "done"})
 
