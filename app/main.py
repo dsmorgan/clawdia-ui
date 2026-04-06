@@ -115,15 +115,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Clawdia UI", lifespan=lifespan)
 
-# Session middleware for OIDC and CSRF
 settings = get_settings()
-app.add_middleware(
-    SessionMiddleware,
-    secret_key=settings.secret_key,
-    session_cookie="clawdia_session",
-    same_site="lax",
-    https_only=not settings.debug,
-)
 
 # Register auth routes
 app.include_router(auth_router)
@@ -133,6 +125,9 @@ templates.env.globals["relative_time"] = relative_time
 
 
 # --- Middleware: auth redirect for HTML pages ---
+# NOTE: Starlette processes middleware last-added-first (outermost).
+# SessionMiddleware must be added AFTER this so it runs first and
+# populates request.session before auth_redirect_middleware reads it.
 
 @app.middleware("http")
 async def auth_redirect_middleware(request: Request, call_next):
@@ -149,12 +144,31 @@ async def auth_redirect_middleware(request: Request, call_next):
     if request.headers.get("upgrade", "").lower() == "websocket":
         return await call_next(request)
 
+    # DEBUG mode: auto-populate a fake session so auth is bypassed
+    if settings.debug and not request.session.get("user"):
+        request.session["user"] = {
+            "sub": "debug-user",
+            "name": "Debug User",
+            "email": "debug@localhost",
+            "preferred_username": "debug",
+        }
+
     # Check auth for everything else
     user = get_current_user(request)
     if user is None and path not in ("/logged-out",):
         return RedirectResponse(url="/auth/login", status_code=302)
 
     return await call_next(request)
+
+
+# Session middleware — added after auth_redirect so it's outermost and runs first
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.secret_key,
+    session_cookie="clawdia_session",
+    same_site="lax",
+    https_only=not settings.debug,
+)
 
 
 # --- Page routes ---
@@ -319,6 +333,7 @@ async def websocket_chat(websocket: WebSocket):
 
     # Authenticate from session
     user_data = websocket.session.get("user")
+    logger.info("WebSocket auth check: user_data=%s", "present" if user_data else "MISSING")
     if not user_data:
         await websocket.send_json({"type": "error", "content": "Not authenticated"})
         await websocket.close(code=4001)
@@ -363,6 +378,7 @@ async def websocket_chat(websocket: WebSocket):
                 try:
                     async for chunk in send_message(session_key, content):
                         full_response.append(chunk)
+                        print(f"[WS] sending chunk: {chunk[:50]}", flush=True)
                         await websocket.send_json({
                             "type": "chunk",
                             "content": chunk,

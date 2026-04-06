@@ -5,9 +5,9 @@ python-multipart==0.0.20
 authlib==1.4.1
 httpx==0.28.1
 itsdangerous==2.2.0
-starlette==0.45.3
 aiosqlite==0.21.0
 websockets==14.2
 pydantic==2.10.5
 pydantic-settings==2.7.1
 pyyaml==6.0.2
+cryptography==44.0.3

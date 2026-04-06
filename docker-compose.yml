@@ -4,7 +4,7 @@ services:
     container_name: clawdia-ui
     restart: unless-stopped
     ports:
-      - "${PORT:-8000}:8000"
+      - "${PORT:-8013}:8000"
     volumes:
       - ./data:/app/data
       - ./config:/app/config:ro
